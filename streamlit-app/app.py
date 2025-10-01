@@ -43,20 +43,15 @@ def load_model():
         def forward(self, x):
             return self.model(x)
 
-    # resolve model path relative to repo root (two levels if app is inside streamlit-app/)
     repo_root = Path(__file__).parent.parent.resolve()
     model_path = repo_root / "artifacts" / "saved_model.pth"
 
     if not model_path.exists():
-        # raise here so the caller sees it; Streamlit will show error in UI/logs
         raise FileNotFoundError(f"Model file not found at: {model_path}")
 
-    # instantiate model and load state dict
     model = CarClassifierResNet(num_classes=len(class_names))
-    # load using CPU first to be safe
     state = torch.load(str(model_path), map_location="cpu")
 
-    # support cases where file contains {'state_dict': ...} or plain state_dict
     if isinstance(state, dict) and "state_dict" in state:
         state_dict = state["state_dict"]
     else:
@@ -73,18 +68,14 @@ def load_model():
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225])
     ])
-
-    # return model, device and transform so the outer code does not import torch at top level
     return model, device, transform
 
-# Attempt to load model (errors will show in Streamlit)
 try:
     model, device, transform = load_model()
     model_loaded = True
 except Exception as e:
     st.error(f"Failed to load model: {e}")
     model_loaded = False
-    # set placeholders to avoid NameError later
     model = None
     device = None
     transform = None
