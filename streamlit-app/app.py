@@ -40,15 +40,8 @@ class CarClassifierResNet(nn.Module):
 
 @st.cache_resource
 def load_model():
-    # repo root (one level up from streamlit-app)
     repo_root = Path(__file__).parent.parent.resolve()
     model_path = repo_root / "artifacts" / "saved_model.pth"
-
-    st.write(f"Loading model from: {model_path}")  # for debugging
-
-    if not model_path.exists():
-        raise FileNotFoundError(f"Model not found at {model_path}")
-
     model = CarClassifierResNet(num_classes=len(class_names))
     state_dict = torch.load(model_path, map_location=device)
     model.load_state_dict(state_dict)
