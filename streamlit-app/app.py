@@ -1,4 +1,6 @@
 import streamlit as st
+import os
+from pathlib import Path
 import torch
 import torch.nn as nn
 from torchvision import transforms, models
@@ -37,17 +39,57 @@ class CarClassifierResNet(nn.Module):
         return self.model(x)
 
 
-# Load trained model
+
+DEFAULT_MODEL_REL_PATH = Path("artifacts") / "saved_model.pth"
 @st.cache_resource
 def load_model():
+    # Resolve path relative to this file (works on Streamlit Cloud)
+    base_dir = Path(__file__).parent.resolve()
+    model_path = (base_dir / DEFAULT_MODEL_REL_PATH).resolve()
+
+    # Debug info for Streamlit logs / UI
+    st.write(f"Base dir: {base_dir}")
+    st.write(f"Looking for model at: {model_path}")
+
+    if not model_path.exists():
+        # helpful debug listing
+        st.error("Model file not found at the expected path.")
+        st.write("Files in repo root:", sorted([p.name for p in base_dir.iterdir() if p.exists()]))
+        if (base_dir / "artifacts").exists():
+            st.write("Files in artifacts:", sorted([p.name for p in (base_dir / "artifacts").iterdir()]))
+        # raise a helpful error (Streamlit will show it)
+        raise FileNotFoundError(f"No such file: {model_path}")
+
+    # instantiate model architecture
     model = CarClassifierResNet(num_classes=len(class_names))
-    model.load_state_dict(torch.load("saved_model.pth", map_location=device))
+
+    # load using CPU/mapped device first
+    state = torch.load(str(model_path), map_location="cpu")
+    # if you saved full model vs state_dict, handle both:
+    if isinstance(state, dict) and "state_dict" in state and not any(k.startswith("__") for k in state):
+        # if saved as {'state_dict': ...}
+        state_dict = state["state_dict"]
+    else:
+        state_dict = state
+
+    # if saved as full model object (less recommended), try load_state_dict, else load directly
+    try:
+        model.load_state_dict(state_dict)
+    except RuntimeError:
+        # fallback: maybe the file contains a full model object
+        try:
+            model = state
+        except Exception as e:
+            raise RuntimeError("Failed to load model state_dict or model object.") from e
+
+    # move to device and eval
     model.to(device)
     model.eval()
     return model
 
-
+# call it
 model = load_model()
+
 
 # Define preprocessing pipeline
 transform = transforms.Compose([
